@@ -1,0 +1,8 @@
+numpy
+PyYAML
+optuna
+jax
+matplotlib
+scikit-learn
+plotly
+optax

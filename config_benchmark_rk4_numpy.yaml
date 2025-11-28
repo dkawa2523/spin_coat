@@ -1,0 +1,128 @@
+run_mode: optimize
+data:
+  base_dir: ./data/benchmark
+  sensors:
+  - name: center
+    file: benchmark_center.csv
+  - name: middle
+    file: benchmark_middle.csv
+  - name: edge
+    file: benchmark_edge.csv
+model:
+  rho: 1000.0
+  omega: 320.0
+  h_ref: 1.0e-06
+  mu_model:
+    enabled: true
+    mu0: 0.01
+    m: 1.0
+  evap_model:
+    enabled: true
+    E0: 1.0e-08
+    alpha_E: 0.0
+fit:
+  backend: numpy
+  loss: mse
+  output_dir: outputs_benchmark_rk4_numpy
+  integrator: rk4
+  optimiser: optuna
+  jax_platform: cpu
+  jax_enable_x64: true
+  continuity:
+    enabled: true
+    weight: 0.0
+    order: 1
+    dt_scale: 1.0
+  time:
+    use_data_time_grid: true
+    dt: 0.03
+    t_min: 0.0
+    t_max: 6.0
+  initial_h:
+    mode: from_data
+    fixed_value: 2.0e-06
+  parameters:
+    global:
+      log10_mu0:
+        init: -2.5
+        optuna_low: -4.0
+        optuna_high: -1.0
+      m:
+        init: 1.0
+        optuna_low: 0.0
+        optuna_high: 3.0
+      log10_E0:
+        init: -8.5
+        optuna_low: -10.0
+        optuna_high: -6.0
+      alpha_E:
+        init: 0.0
+        optuna_low: -1.0
+        optuna_high: 1.5
+    per_sensor:
+      k_flow:
+        init: 1.0
+        optuna_low: 0.3
+        optuna_high: 2.0
+      delta_E:
+        init: 0.0
+        optuna_low: -0.3
+        optuna_high: 0.3
+  optuna:
+    n_trials: 200
+    timeout: null
+    direction: minimize
+    sampler: tpe
+  gradient:
+    max_iters: 200
+    learning_rate: 0.1
+    grad_eps: 0.001
+    tol_grad_norm: 0.0001
+    print_every: 20
+neural_ode:
+  enabled: false
+  lr: 0.001
+  steps: 500
+  seed: 0
+  layer_sizes:
+  - 3
+  - 32
+  - 32
+  - 1
+  output_dir: outputs_neural
+  corr_scale_final: 1.0e-07
+  warmup_steps: 200
+  clip_grad: 1.0
+  params_out: outputs_neural/params.npz
+  inference:
+    enabled: false
+    params_path: outputs_neural/params.npz
+  reg_weight_start: 0.5
+  reg_weight_end: 0.05
+  target_r2: 0.8
+forward:
+  enabled: false
+  output_dir: outputs_forward
+  integrator: rk4
+  override_model:
+    rho: null
+    omega: null
+    h_ref: null
+  parameters:
+    global:
+      log10_mu0: -2.5
+      m: 1.0
+      log10_E0: -8.5
+      alpha_E: 0.0
+    per_sensor:
+      k_flow:
+        center: 1.0
+        middle: 1.0
+        edge: 1.0
+      delta_E:
+        center: 0.0
+        middle: 0.0
+        edge: 0.0
+  initial_h:
+    mode: from_data
+    fixed_value: 2.0e-06

@@ -1,0 +1,37 @@
+# Training-specific configuration for Hybrid Neural ODE
+# Override only what differs from the base config (data/model/backend should come from base).
+
+# Use the same model/data paths as base config_example.yaml; only training knobs change here.
+
+# Neural ODE training hyperparameters
+neural_ode:
+  enabled: true          # enable training
+  lr: 1.0e-3             # learning rate for Adam
+  steps: 500             # training steps
+  seed: 0
+  layer_sizes: [3, 64, 64, 1]  # MLP architecture
+  output_dir: outputs_neural   # where to save plots/curves
+  params_out: outputs_neural/params.npz
+  corr_scale_final: 1.0e-7   # scale for neural correction (tanh-bounded)
+  warmup_steps: 500          # steps to reach corr_scale_final
+  clip_grad: 0.5             # gradient clipping norm
+  reg_weight_start: 0.5      # initial penalty
+  reg_weight_end: 0.01       # final penalty
+  target_r2: 0.99             # early-stop target (mean R2)
+
+# Inference settings (used by calcuration.py forward mode if enabled)
+neural_ode_inference:
+  enabled: false
+  params_path: outputs_neural/params.npz
+
+# Fit/integrator settings (fallback to base if missing)
+fit:
+  backend: jax
+  integrator: rk4
+  initial_h:
+    mode: from_data
+    fixed_value: 2.0e-6
+
+# Forward simulation toggle (kept false for training)
+forward:
+  enabled: false

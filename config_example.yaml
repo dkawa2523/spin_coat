@@ -1,0 +1,157 @@
+data:
+  # Base directory for all sensor CSV files.  Relative paths are resolved from the location of this YAML file.
+  base_dir: ./data
+  # List of sensors.  Each sensor has a name and a filename.  Additional sensors can be added here.
+  sensors:
+    - name: center
+      file: synthetic_center.csv
+    - name: middle
+      file: synthetic_middle.csv
+    - name: edge
+      file: synthetic_edge.csv
+
+# Model parameters define physical constants and the functional forms for viscosity and evaporation.
+model:
+  rho: 1000.0        # density of the liquid [kg/m^3]
+  omega: 300.0       # angular velocity [rad/s]
+  h_ref: 1.0e-6      # reference thickness [m] used for non‑dimensionalisation
+
+  # Viscosity model settings.  If disabled, viscosity is constant = mu0.
+  mu_model:
+    enabled: true
+    mu0: 1.0e-2    # baseline viscosity [Pa·s]
+    m: 1.0         # exponent in mu(h) = mu0 * (h / h_ref)^(-m)
+
+  # Evaporation model settings.  If disabled, evaporation rate is zero.
+  evap_model:
+    enabled: true
+    E0: 1.0e-8    # baseline evaporation rate [m/s]
+    alpha_E: 0.0  # exponent in E(h) = E0 * (h / h_ref)^(alpha_E)
+
+# Global run mode: 'optimize' or 'forward'
+run_mode: optimize
+
+# Fitting parameters control which backend to use (numpy or jax) and define optimisation settings.
+fit:
+  backend: jax      # choose 'numpy' or 'jax' for the solver backend
+  loss: mse          # currently only mean squared error is implemented
+  output_dir: outputs_jax # directory for plots/reports from optimisation runs
+  integrator: euler   # 'euler' or 'rk4'
+
+  # Choose optimisation method: 'optuna' or 'gradient'
+  optimiser: optuna
+  # JAX platform preference: 'cpu', 'gpu', or unset for auto
+  jax_platform: cpu
+  # Enable 64-bit in JAX for numerical parity with NumPy
+  jax_enable_x64: true
+  # Continuity regularization across sensor predictions
+  continuity:
+    enabled: true
+    weight: 0.0          # scaling of continuity penalty relative to MSE
+    order: 1             # 1: first derivative penalty, 2: second derivative (curvature)
+    dt_scale: 1.0        # scale time step when computing finite differences
+
+  # Time discretisation.  If use_data_time_grid is true, the ODE solver evaluates h(t) only at the same time points as the data.  Otherwise a regular grid is used.
+  time:
+    use_data_time_grid: true
+    dt: 0.05         # step size for explicit Euler when not using the data time grid
+    t_min: 0.0
+    t_max: 5.0
+
+  # Initial film thickness.  If mode is 'from_data', the solver uses the first data point for each sensor.  Otherwise a fixed value is used.
+  initial_h:
+    mode: from_data  # 'from_data' or 'fixed'
+    fixed_value: 2.0e-6
+
+  # Search ranges and initial guesses for each parameter.  log10_mu0 and log10_E0 are stored in log10 space for numerical stability.
+  parameters:
+    global:
+      log10_mu0:
+        init: -2.0
+        optuna_low: -4.0
+        optuna_high: -1.0
+      m:
+        init: 1.0
+        optuna_low: 0.0
+        optuna_high: 3.0
+      log10_E0:
+        init: -8.0
+        optuna_low: -10.0
+        optuna_high: -6.0
+      alpha_E:
+        init: 0.0
+        optuna_low: -2.0
+        optuna_high: 2.0
+    per_sensor:
+      k_flow:
+        init: 1.0
+        optuna_low: 0.5
+        optuna_high: 2.0
+      delta_E:
+        init: 0.0
+        optuna_low: -0.5
+        optuna_high: 0.5
+
+  # Optuna optimisation settings.  Adjust n_trials for more thorough searches.  A timeout can also be specified.
+  optuna:
+    n_trials: 50
+    timeout: null
+    direction: minimize
+    sampler: tpe
+
+  # Gradient descent settings.  A simple finite difference gradient is used.
+  gradient:
+    max_iters: 200
+    learning_rate: 0.1
+    grad_eps: 1.0e-3
+    tol_grad_norm: 1.0e-4
+    print_every: 20
+
+neural_ode:
+  enabled: false
+  lr: 1.0e-3
+  steps: 500
+  seed: 0
+  layer_sizes: [3, 32, 32, 1]
+  output_dir: outputs_neural
+  corr_scale_final: 1.0e-7   # final scale for neural correction term (tanh-bounded)
+  warmup_steps: 200          # steps to reach corr_scale_final
+  clip_grad: 1.0             # gradient clipping norm
+  params_out: outputs_neural/params.npz
+  inference:
+    enabled: false
+    params_path: outputs_neural/params.npz
+  reg_weight_start: 0.5    # initial penalty to keep hybrid close to physical baseline
+  reg_weight_end: 0.05     # final penalty after warmup
+  target_r2: 0.8           # early-stop target
+
+# Forward simulation (no optimisation): fix parameters and compute h(t) for given process conditions.
+forward:
+  enabled: false
+  output_dir: outputs_forward
+  integrator: euler   # euler | rk4 | rk23 | semi_implicit
+  # Optional overrides for process conditions; if omitted, use model.rho/omega/h_ref.
+  override_model:
+    rho: null
+    omega: null
+    h_ref: null
+  # Fixed parameters (same structure/units as fit.parameters, log10 for mu0/E0)
+  parameters:
+    global:
+      log10_mu0: -2.0
+      m: 1.0
+      log10_E0: -8.0
+      alpha_E: 0.0
+    per_sensor:
+      k_flow:
+        center: 1.0
+        middle: 1.0
+        edge: 1.0
+      delta_E:
+        center: 0.0
+        middle: 0.0
+        edge: 0.0
+  # Initial film thickness for forward simulation
+  initial_h:
+    mode: from_data   # 'from_data' or 'fixed'
+    fixed_value: 2.0e-6
